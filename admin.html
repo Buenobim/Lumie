@@ -27,8 +27,7 @@
 import * as THREE from 'three';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-window.STL3D = { THREE, STLLoader, OrbitControls, GLTFExporter };
+window.STL3D = { THREE, STLLoader, OrbitControls };
 window.dispatchEvent(new Event('stl3d-ready'));
 </script>
 
@@ -299,7 +298,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--txt2);margin:14
     </div>
     <input type="file" id="fotoFile" accept="image/*" hidden>
     <input type="file" id="stlFile" accept=".stl" hidden>
-    <p class="hint">A foto é comprimida automaticamente. Com um STL você gira a peça, escolhe a cor e captura a foto — e, se o modelo for leve, dá para ativar o 3D de verdade no site.</p>
+    <p class="hint">A foto é comprimida automaticamente. Com um STL você gira a peça, escolhe a cor e captura a foto — e pode ativar o <b>giro 360°</b>: o painel fotografa a peça de 36 ângulos e o cliente gira com o dedo, leve como uma foto.</p>
 
     <!-- visualizador STL -->
     <div class="stl-wrap" id="stlWrap">
@@ -310,7 +309,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--txt2);margin:14
         <label class="switch" style="margin:0;flex:1;min-width:180px">
           <input type="checkbox" id="stl3dReal">
           <span class="sw"></span>
-          <span style="font-size:13px">Ativar 3D real no site <span class="hint" id="stlPeso"></span></span>
+          <span style="font-size:13px">Giro 360° no site (super leve) <span class="hint" id="stlPeso"></span></span>
         </label>
       </div>
     </div>
@@ -345,8 +344,8 @@ const db = firebase.firestore();
 
 const $ = id => document.getElementById(id);
 const DRAFT_KEY = "lumie_admin_rascunho_v1";
-const LIMITE_FOTO = 600000;   // ~600 KB em base64
-const LIMITE_GLB  = 680000;   // ~680 KB em base64
+const LIMITE_FOTO   = 600000; // ~600 KB em base64
+const LIMITE_SPRITE = 680000; // ~680 KB em base64 (imagem do giro 360°)
 
 /* estado */
 let state = {
@@ -507,7 +506,7 @@ function renderLista(){
         <span>${esc(p.preco)} · ${esc(p.categoria)}</span>
         <div class="ptags">
           ${p.badge ? `<span class="ptag">${esc(p.badge)}</span>` : ""}
-          ${(p.temModelo3d || state.glbNovos[p.id]) ? `<span class="ptag t3d">3D real</span>` : ""}
+          ${(p.temModelo3d || state.glbNovos[p.id]) ? `<span class="ptag t3d">🔄 360°</span>` : ""}
           ${p.ativo ? "" : `<span class="ptag">oculto</span>`}
         </div>
       </div>
@@ -678,23 +677,20 @@ $("formSave").addEventListener("click", async () => {
   if (!id){ id = novoId(); }
 
   if (quer3d && stlSessao){
-    loading(true, "Otimizando modelo 3D…");
+    loading(true, "Fotografando a peça em 36 ângulos…");
     try{
-      const b64 = await exportaGLB();
-      if (b64.length > LIMITE_GLB){
-        loading(false);
-        if (!confirm(`Este modelo ficou pesado (${Math.round(b64.length/1024)} KB) e não cabe no plano gratuito.\n\nOK = salvar só com a foto (sem 3D real)\nCancelar = voltar e ajustar`)) return;
-        state.glbRemover.push(id);
-        delete state.glbNovos[id];
-        dados.temModelo3d = false;
-      } else {
-        state.glbNovos[id] = b64;
-        state.glbRemover = state.glbRemover.filter(x => x !== id);
-        dados.temModelo3d = true;
-      }
+      await new Promise(r => setTimeout(r, 50)); // deixa o "carregando" aparecer
+      const sprite = geraSprite360();
+      state.glbNovos[id] = sprite;
+      state.glbRemover = state.glbRemover.filter(x => x !== id);
+      dados.temModelo3d = true;
+      toast(`🔄 Giro 360° gerado (${Math.round(sprite.sheet.length / 1024)} KB — leve!)`);
     }catch(e){
       console.error(e);
-      toast("Falha ao converter o STL — salvei sem 3D real", "err");
+      loading(false);
+      if (!confirm("Não consegui gerar um giro leve para esta peça.\n\nOK = salvar só com a foto\nCancelar = voltar")) return;
+      state.glbRemover.push(id);
+      delete state.glbNovos[id];
       dados.temModelo3d = false;
     }
     loading(false);
@@ -786,7 +782,9 @@ function montaVisualizadorSTL(buffer){
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2; // STL costuma vir com Z para cima
-  scene.add(mesh);
+  const pivot = new THREE.Group(); // gira a peça para o modo 360°
+  pivot.add(mesh);
+  scene.add(pivot);
 
   cam.position.set(raio * 2.2, raio * 1.4, raio * 2.2);
   const ctrl = new OrbitControls(cam, renderer.domElement);
@@ -802,10 +800,10 @@ function montaVisualizadorSTL(buffer){
   })();
 
   $("stlCor").oninput = () => { mat.color.set($("stlCor").value); renderer.render(scene, cam); };
-  $("stlPeso").textContent = `(${(buffer.byteLength / 1048576).toFixed(1)} MB no STL)`;
+  $("stlPeso").textContent = "— o cliente recebe só as fotos do giro, nunca o STL";
 
   stlSessao = {
-    mesh, scene, renderer, cam,
+    mesh, pivot, scene, renderer, cam,
     parar(){ vivo = false; renderer.dispose(); geo.dispose(); mat.dispose(); }
   };
 }
@@ -822,20 +820,41 @@ $("stlFoto").addEventListener("click", async () => {
   loading(false);
 });
 
-function exportaGLB(){
-  return new Promise((res, rej) => {
-    const { GLTFExporter } = window.STL3D;
-    new GLTFExporter().parse(stlSessao.mesh,
-      glb => {
-        const bytes = new Uint8Array(glb);
-        let bin = "";
-        const CH = 0x8000;
-        for (let i = 0; i < bytes.length; i += CH)
-          bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
-        res(btoa(bin));
-      },
-      rej, { binary: true });
-  });
+/* Fotografa a peça em N ângulos e monta uma única imagem ("filme" 360°).
+   Tenta configurações cada vez menores até caber no plano gratuito. */
+function geraSprite360(){
+  const s = stlSessao;
+  const rotInicial = s.pivot.rotation.y; // o ângulo atual vira o quadro 1
+  const configs = [
+    { n: 36, cols: 6, rows: 6, cell: 360 },
+    { n: 36, cols: 6, rows: 6, cell: 300 },
+    { n: 24, cols: 6, rows: 4, cell: 300 },
+    { n: 24, cols: 6, rows: 4, cell: 240 }
+  ];
+  try{
+    for (const cfg of configs){
+      const cv = document.createElement("canvas");
+      cv.width = cfg.cols * cfg.cell;
+      cv.height = cfg.rows * cfg.cell;
+      const cx = cv.getContext("2d");
+      for (let k = 0; k < cfg.n; k++){
+        s.pivot.rotation.y = rotInicial + (k / cfg.n) * Math.PI * 2;
+        s.renderer.render(s.scene, s.cam);
+        cx.drawImage(s.renderer.domElement,
+          (k % cfg.cols) * cfg.cell, Math.floor(k / cfg.cols) * cfg.cell, cfg.cell, cfg.cell);
+      }
+      for (const q of [0.8, 0.66, 0.52]){
+        let out = cv.toDataURL("image/webp", q);
+        if (!out.startsWith("data:image/webp")) out = cv.toDataURL("image/jpeg", q);
+        if (out.length <= LIMITE_SPRITE)
+          return { sheet: out, frames: cfg.n, cols: cfg.cols, rows: cfg.rows };
+      }
+    }
+    throw new Error("nao coube");
+  } finally {
+    s.pivot.rotation.y = rotInicial;
+    s.renderer.render(s.scene, s.cam);
+  }
 }
 
 /* ═══════════════ CONFIG ═══════════════ */
@@ -873,8 +892,8 @@ $("pubBtn").addEventListener("click", async () => {
       batch.delete(db.collection("produtos").doc(id));
       batch.delete(db.collection("modelos3d").doc(id));
     });
-    Object.entries(state.glbNovos).forEach(([id, b64]) => {
-      batch.set(db.collection("modelos3d").doc(id), { glb: b64 });
+    Object.entries(state.glbNovos).forEach(([id, sprite]) => {
+      batch.set(db.collection("modelos3d").doc(id), sprite);
     });
     state.glbRemover.forEach(id => batch.delete(db.collection("modelos3d").doc(id)));
     batch.set(db.collection("site").doc("config"), {

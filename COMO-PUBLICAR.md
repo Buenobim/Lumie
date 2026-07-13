@@ -20,8 +20,8 @@ consegue ler nem mudar nada (as regras do banco só autorizam o seu e-mail).
    - **📷 Enviar foto** — a foto é comprimida automaticamente
    - **🧊 Abrir arquivo STL** — a peça abre em 3D! Você gira, escolhe a
      **cor do filamento** e toca em *"📸 Usar este ângulo como foto"*.
-     Se o modelo for leve, dá pra ativar **"3D real no site"** (o cliente
-     gira a peça com o dedo!)
+     Ative o **"Giro 360°"**: o painel fotografa a peça de 36 ângulos e o
+     cliente gira com o dedo no site — super leve, o STL nunca é enviado.
    - **▲▼** muda a ordem na vitrine · **✏️** edita · **⧉** duplica · **🗑️** exclui
    - Chave **"Visível na vitrine"** esconde sem excluir
 4. Toque em **🚀 PUBLICAR** → o site dos clientes atualiza NA HORA.
@@ -63,7 +63,8 @@ O QR Code deve apontar para **https://luime-a6b51.web.app**
 - `index.html` = vitrine (lê Firestore via REST, sem SDK; cai nos exemplos
   embutidos se nada foi publicado)
 - `admin.html` = painel (Firebase SDK compat + three.js para STL)
-- Coleções: `produtos/{id}`, `modelos3d/{id}` (GLB base64), `site/config`
+- Coleções: `produtos/{id}`, `modelos3d/{id}` (sprite 360°: {sheet, frames,
+  cols, rows} — imagem única com os quadros do giro), `site/config`
 - Fotos ficam em base64 dentro dos documentos (sem Cloud Storage, que
   exigiria plano pago) — por isso são comprimidas a ~600 KB
 - Deploy: `firebase deploy --only hosting,firestore:rules`

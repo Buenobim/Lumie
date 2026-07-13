@@ -313,7 +313,12 @@ header.hero{position:relative;padding:64px 0 30px;text-align:center;overflow:hid
 .m-spinner .face .ph{font-size:96px}
 .m-pedestal{width:170px;height:30px;bottom:6px}
 .m-hint{text-align:center;font-size:11.5px;color:var(--txt2);letter-spacing:1px;margin-top:-6px}
-.m-viewer{width:100%;height:250px;--poster-color:transparent}
+.turn{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);width:216px;height:216px;
+  border-radius:16px;display:grid;place-items:center;font-size:64px;
+  background-color:#171132;background-repeat:no-repeat;cursor:grab;
+  border:1px solid rgba(168,130,255,.35);box-shadow:0 0 26px rgba(168,85,247,.25)}
+.turn::after{content:"";position:absolute;inset:0;border-radius:16px;pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(34,211,238,.05) 0 2px,transparent 2px 5px)}
 .m-name{font-family:'Orbitron';font-weight:700;font-size:21px;margin-top:14px;letter-spacing:.5px}
 .m-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .m-meta span{font-size:12px;padding:6px 11px;border-radius:999px;border:1px solid var(--line);
@@ -690,14 +695,18 @@ renderGrid();
 const modal = document.getElementById("modal");
 const modalBody = document.getElementById("modalBody");
 let rafId = null;
+let turnTimer = null;
 
 function abreModal(prod){
-  const usaGLB = !!prod.modelo3d || !!prod.temModelo3d;
+  const usa360 = !!prod.temModelo3d;
   modalBody.innerHTML = `
-    ${usaGLB ? `
-      <model-viewer class="m-viewer" ${prod.modelo3d ? `src="${prod.modelo3d}"` : ""} auto-rotate rotation-per-second="30deg"
-        camera-controls disable-zoom shadow-intensity="1" exposure="1.1"></model-viewer>
-      <p class="m-hint">🧊 gire com o dedo — é 3D de verdade!</p>`
+    ${usa360 ? `
+      <div class="m-stage" id="turnStage">
+        <div class="beam" style="width:150px;height:200px;bottom:14px"></div>
+        <div class="turn" id="turnEl">${prod.emoji || "🧊"}</div>
+        <div class="pedestal m-pedestal"></div>
+      </div>
+      <p class="m-hint" id="turnHint">carregando giro 360°…</p>`
     : `
       <div class="m-stage" id="mStage">
         <div class="beam" style="width:140px;height:190px;bottom:18px"></div>
@@ -721,32 +730,60 @@ function abreModal(prod){
   modal.classList.add("open");
   document.body.classList.add("locked");
 
-  if (usaGLB && !window.customElements.get("model-viewer")) {
-    const s = document.createElement("script");
-    s.type = "module";
-    s.src = "https://unpkg.com/@google/model-viewer@3.4.0/dist/model-viewer.min.js";
-    document.head.appendChild(s);
-  }
-
-  // modelo 3D publicado pelo painel: baixa só quando o cliente abre a peça
-  if (usaGLB && !prod.modelo3d){
+  // giro 360°: baixa o "filme" da peça só quando o cliente abre (leve!)
+  if (usa360){
+    const stage = document.getElementById("turnStage");
+    const el = document.getElementById("turnEl");
+    const hint = document.getElementById("turnHint");
     (async () => {
       try{
         const r = await fetch(fsURL(`modelos3d/${prod.id}`));
         if (!r.ok) throw 0;
         const d = fsCampos((await r.json()).fields);
-        const bytes = Uint8Array.from(atob(d.glb), c => c.charCodeAt(0));
-        const mv = modalBody.querySelector("model-viewer");
-        if (mv) mv.src = URL.createObjectURL(new Blob([bytes], { type: "model/gltf-binary" }));
+        if (!d.sheet) throw 0;
+        const N = d.frames || 36, COLS = d.cols || 6, ROWS = d.rows || 6;
+        el.textContent = "";
+        el.style.backgroundImage = `url(${d.sheet})`;
+        el.style.backgroundSize = `${COLS * 100}% ${ROWS * 100}%`;
+        let fr = 0, pausadoAte = 0;
+        const mostra = () => {
+          el.style.backgroundPosition =
+            `${COLS > 1 ? (fr % COLS) * 100 / (COLS - 1) : 0}% ` +
+            `${ROWS > 1 ? Math.floor(fr / COLS) * 100 / (ROWS - 1) : 0}%`;
+        };
+        mostra();
+        hint.textContent = "↔ arraste para girar — 360°";
+        turnTimer = setInterval(() => {           // gira sozinho…
+          if (Date.now() < pausadoAte){ return; }
+          fr = (fr + 1) % N; mostra();
+        }, 110);
+        let arrastando = false, acum = 0, lx = 0;  // …e obedece o dedo
+        stage.addEventListener("pointerdown", e => { arrastando = true; lx = e.clientX; stage.setPointerCapture(e.pointerId); });
+        stage.addEventListener("pointermove", e => {
+          if (!arrastando) return;
+          acum += e.clientX - lx; lx = e.clientX;
+          pausadoAte = Date.now() + 1500;
+          const passo = 7; // pixels por quadro
+          while (Math.abs(acum) >= passo){
+            fr = (fr - Math.sign(acum) + N) % N;
+            acum -= Math.sign(acum) * passo;
+          }
+          mostra();
+        });
+        ["pointerup","pointercancel"].forEach(ev => stage.addEventListener(ev, () => arrastando = false));
       }catch(e){
-        const mv = modalBody.querySelector("model-viewer");
-        if (mv && prod.foto) mv.outerHTML =
-          `<img src="${prod.foto}" alt="${prod.nome}" style="display:block;max-width:250px;max-height:250px;margin:0 auto;border-radius:14px">`;
+        // sem giro disponível: mostra a foto normal
+        if (prod.foto){
+          el.textContent = "";
+          el.style.backgroundImage = `url(${prod.foto})`;
+          el.style.backgroundSize = "cover";
+        }
+        hint.textContent = "";
       }
     })();
   }
 
-  if (!usaGLB){
+  if (!usa360){
     /* giro automático + arrastar para girar */
     const sp = document.getElementById("mSpinner");
     const stage = document.getElementById("mStage");
@@ -774,6 +811,8 @@ function fechaModal(){
   document.body.classList.remove("locked");
   if (rafId) cancelAnimationFrame(rafId);
   rafId = null;
+  if (turnTimer) clearInterval(turnTimer);
+  turnTimer = null;
   modalBody.innerHTML = "";
 }
 document.getElementById("modalClose").addEventListener("click", fechaModal);
