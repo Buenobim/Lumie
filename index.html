@@ -319,6 +319,10 @@ header.hero{position:relative;padding:64px 0 30px;text-align:center;overflow:hid
   border:1px solid rgba(168,130,255,.35);box-shadow:0 0 26px rgba(168,85,247,.25)}
 .turn::after{content:"";position:absolute;inset:0;border-radius:16px;pointer-events:none;
   background:repeating-linear-gradient(0deg,rgba(34,211,238,.05) 0 2px,transparent 2px 5px)}
+/* versão mini do giro 360° para os cards da vitrine */
+.turn.mini{width:126px;height:126px;top:50%;transform:translate(-50%,-56%);
+  border-radius:14px;font-size:44px;box-shadow:0 0 20px rgba(168,85,247,.18)}
+@media(min-width:640px){.turn.mini{width:144px;height:144px}}
 .m-name{font-family:'Orbitron';font-weight:700;font-size:21px;margin-top:14px;letter-spacing:.5px}
 .m-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .m-meta span{font-size:12px;padding:6px 11px;border-radius:999px;border:1px solid var(--line);
@@ -662,7 +666,10 @@ function faceHTML(prod){
         onerror="this.closest('.spinner').classList.add('no-img')"><div class="ph">${prod.emoji}</div></div>
     <div class="face back"><img src="${prod.foto}" alt=""><div class="ph">${prod.emoji}</div></div>`;
 }
+let gridTimers = [];
 function renderGrid(){
+  gridTimers.forEach(clearInterval);
+  gridTimers = [];
   grid.innerHTML = "";
   PRODUTOS.forEach((prod, i) => {
     if (catAtiva !== "Todos" && prod.categoria !== catAtiva) return;
@@ -683,6 +690,28 @@ function renderGrid(){
     card.addEventListener("click", () => abreModal(prod));
     grid.appendChild(card);
     setTimeout(() => card.classList.add("in"), 40 * i);
+
+    // peça com STL: troca o holograma parado pelo giro 360° de verdade
+    if (prod.temModelo3d){
+      pegaSprite(prod.id).then(d => {
+        if (!d || !card.isConnected) return;
+        const stage = card.querySelector(".stage");
+        const bob = stage.querySelector(".bob");
+        if (bob) bob.remove();
+        const el = document.createElement("div");
+        el.className = "turn mini";
+        const COLS = d.cols || 6, ROWS = d.rows || 6, N = d.frames || 36;
+        el.style.backgroundImage = `url(${d.sheet})`;
+        el.style.backgroundSize = `${COLS * 100}% ${ROWS * 100}%`;
+        stage.insertBefore(el, stage.querySelector(".pedestal"));
+        let fr = Math.floor(Math.random() * N); // cada card começa num ângulo
+        const mostra = () => el.style.backgroundPosition =
+          `${COLS > 1 ? (fr % COLS) * 100 / (COLS - 1) : 0}% ` +
+          `${ROWS > 1 ? Math.floor(fr / COLS) * 100 / (ROWS - 1) : 0}%`;
+        mostra();
+        gridTimers.push(setInterval(() => { fr = (fr + 1) % N; mostra(); }, 140));
+      });
+    }
   });
   if (!grid.children.length){
     grid.innerHTML = `<div class="vazio">🛠️ A vitrine está sendo reabastecida!<br>
@@ -737,10 +766,8 @@ function abreModal(prod){
     const hint = document.getElementById("turnHint");
     (async () => {
       try{
-        const r = await fetch(fsURL(`modelos3d/${prod.id}`));
-        if (!r.ok) throw 0;
-        const d = fsCampos((await r.json()).fields);
-        if (!d.sheet) throw 0;
+        const d = await pegaSprite(prod.id);
+        if (!d) throw 0;
         const N = d.frames || 36, COLS = d.cols || 6, ROWS = d.rows || 6;
         el.textContent = "";
         el.style.backgroundImage = `url(${d.sheet})`;
@@ -840,6 +867,21 @@ function fsCampos(fields){
   const o = {};
   for (const k in (fields || {})) o[k] = fsVal(fields[k]);
   return o;
+}
+/* baixa o giro 360° de uma peça (uma vez só — vale para vitrine e modal) */
+const spriteCache = {};
+function pegaSprite(id){
+  if (!spriteCache[id]){
+    spriteCache[id] = (async () => {
+      try{
+        const r = await fetch(fsURL(`modelos3d/${id}`));
+        if (!r.ok) return null;
+        const d = fsCampos((await r.json()).fields);
+        return d.sheet ? d : null;
+      }catch(e){ return null; }
+    })();
+  }
+  return spriteCache[id];
 }
 (async () => {
   try{

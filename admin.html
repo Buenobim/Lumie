@@ -671,7 +671,7 @@ $("formSave").addEventListener("click", async () => {
     foto: formFoto
   };
 
-  // 3D real: exporta GLB se marcado e houver STL carregado nesta sessão
+  // giro 360°: fotografa o STL carregado nesta sessão
   const quer3d = $("stl3dReal").checked;
   let id = editandoId;
   if (!id){ id = novoId(); }
