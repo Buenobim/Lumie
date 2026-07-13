@@ -1,62 +1,70 @@
-# 🚀 Lumie 3D — Como editar, publicar e gerar o QR Code
+# 🚀 Lumie 3D — Manual do Administrador
 
-## 📂 O que tem nesta pasta
+## 🌐 Endereços
 
-| Arquivo/Pasta | Para que serve |
-|---|---|
-| `index.html` | O site inteiro (página única — é só isso que precisa ser publicado junto com as pastas) |
-| `fotos/` | Coloque aqui as fotos das suas impressões |
-| `modelos/` | (Opcional) modelos 3D `.glb` para girar em 3D de verdade |
+| Página | Endereço | Quem acessa |
+|---|---|---|
+| **Vitrine (clientes)** | https://luime-a6b51.web.app | Todo mundo (é o link do QR Code) |
+| **Painel Admin** | https://luime-a6b51.web.app/admin | Só você, com login Google |
 
-## ✏️ Como adicionar/editar produtos
+Os clientes **nunca veem** o painel — o endereço /admin não aparece em lugar
+nenhum do site, e mesmo que alguém descubra, sem o SEU login Google não
+consegue ler nem mudar nada (as regras do banco só autorizam o seu e-mail).
 
-1. Abra o `index.html` em qualquer editor de texto (até o Bloco de Notas serve)
-2. Procure o bloco `⚙️ CONFIGURAÇÃO — EDITE AQUI!` (está bem marcado)
-3. Cada produto é um bloquinho assim — copie, cole e edite:
+## 🛠️ Gerenciando a vitrine (dia a dia)
 
-```js
-{
-  nome: "Dragão Articulado",
-  emoji: "🐉",                    // aparece enquanto não tem foto
-  preco: "R$ 45",
-  categoria: "Articulados",       // cria o filtro automaticamente
-  desc: "Descrição fofa do produto...",
-  foto: "fotos/dragao.jpg",       // salve a foto na pasta fotos/
-  modelo3d: "",                   // opcional: "modelos/dragao.glb"
-  prazo: "3 a 5 dias",
-  badge: "🔥 Mais pedido"         // deixe "" para não ter selo
-},
-```
+1. Abra **https://luime-a6b51.web.app/admin** (salve nos favoritos do celular!)
+2. Entre com sua conta Google (buenobimbueno@gmail.com)
+3. Gerencie:
+   - **＋ Novo produto** — nome, preço, categoria, prazo, selo, descrição
+   - **📷 Enviar foto** — a foto é comprimida automaticamente
+   - **🧊 Abrir arquivo STL** — a peça abre em 3D! Você gira, escolhe a
+     **cor do filamento** e toca em *"📸 Usar este ângulo como foto"*.
+     Se o modelo for leve, dá pra ativar **"3D real no site"** (o cliente
+     gira a peça com o dedo!)
+   - **▲▼** muda a ordem na vitrine · **✏️** edita · **⧉** duplica · **🗑️** exclui
+   - Chave **"Visível na vitrine"** esconde sem excluir
+4. Toque em **🚀 PUBLICAR** → o site dos clientes atualiza NA HORA.
 
-- **Número do WhatsApp** e **mensagens** também ficam nesse mesmo bloco.
+> 💡 Enquanto você não publica, as mudanças ficam num **rascunho** salvo no
+> seu navegador. Pode editar com calma e publicar tudo de uma vez.
 
-## 🌐 Como publicar (de graça)
+Na aba **⚙️ Configurações** você troca o número de WhatsApp que recebe os pedidos.
 
-**Opção mais fácil — Netlify:**
-1. Entre em https://app.netlify.com/drop
-2. Crie uma conta gratuita (pode usar o Google)
-3. Arraste a pasta `Plataforma_Lumie` inteira para a página
-4. Pronto! Você recebe um link tipo `https://lumie3d.netlify.app`
-5. Dá para trocar o nome do link em *Site settings → Change site name*
+## 🔑 Primeiro acesso (fazer 1 vez só)
 
-**Alternativas:** Vercel (vercel.com), GitHub Pages, ou qualquer hospedagem.
+O login Google precisa estar ativado no Firebase:
 
-⚠️ Sempre que editar produtos ou adicionar fotos, é só arrastar a pasta de novo
-no Netlify que o site atualiza.
+1. Abra https://console.firebase.google.com/project/luime-a6b51/authentication
+2. Clique em **Vamos começar** (se aparecer)
+3. Aba **Sign-in method** → **Google** → **Ativar** → escolha seu e-mail de
+   suporte → **Salvar**
 
-## 📱 Como gerar o QR Code
+Pronto para sempre. Sem esse passo, o painel avisa "login não ativado".
 
-Com o link publicado em mãos:
-1. Entre em https://br.qr-code-generator.com (ou qualquer gerador)
-2. Cole o link do seu site
-3. Baixe o QR em alta resolução (PNG ou SVG) e use em cartões, adesivos, banner…
+## 👥 Dar acesso de administrador a outra pessoa
 
-💡 **Dica:** peça para o Claude! Mande o link publicado e peça
-*"gera o QR Code do meu site em PNG"* — ele gera o arquivo pra você.
+1. Abra o arquivo `firestore.rules` desta pasta
+2. Adicione o e-mail (Google) da pessoa na lista, ex:
+   ```
+   'buenobimbueno@gmail.com',
+   'outrapessoa@gmail.com'
+   ```
+3. No terminal, nesta pasta: `firebase deploy --only firestore:rules`
 
-## 📸 Dicas para as fotos venderem mais
+## 📱 QR Code
 
-- Fundo escuro ou neutro (combina com o tema do site)
-- Foto quadrada (ex: 800×800) fica perfeita na vitrine
-- Boa iluminação de frente — a peça é a estrela ✨
-- Se tiver o modelo `.glb` da peça, melhor ainda: o cliente gira em 3D de verdade!
+O QR Code deve apontar para **https://luime-a6b51.web.app**
+(gere em https://br.qr-code-generator.com ou peça ao Claude).
+
+## 🧑‍💻 Para desenvolvedores (ou pro Claude do futuro)
+
+- Site estático no Firebase Hosting, dados no Firestore (projeto `luime-a6b51`)
+- `index.html` = vitrine (lê Firestore via REST, sem SDK; cai nos exemplos
+  embutidos se nada foi publicado)
+- `admin.html` = painel (Firebase SDK compat + three.js para STL)
+- Coleções: `produtos/{id}`, `modelos3d/{id}` (GLB base64), `site/config`
+- Fotos ficam em base64 dentro dos documentos (sem Cloud Storage, que
+  exigiria plano pago) — por isso são comprimidas a ~600 KB
+- Deploy: `firebase deploy --only hosting,firestore:rules`
+- Código também em https://github.com/Buenobim/Lumie

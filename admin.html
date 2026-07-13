@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Lumie 3D — Painel do Administrador</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#07060f">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛠️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Chakra+Petch:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- Firebase (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+
+<!-- three.js para visualizar STL -->
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+window.STL3D = { THREE, STLLoader, OrbitControls, GLTFExporter };
+window.dispatchEvent(new Event('stl3d-ready'));
+</script>
+
+<style>
+:root{
+  --bg:#0a0817; --panel:#141028; --panel2:#1b1536;
+  --line:rgba(168,130,255,.22); --line2:rgba(168,130,255,.38);
+  --cyan:#22d3ee; --magenta:#e879f9; --purple:#a855f7;
+  --txt:#f1efff; --txt2:#b9b3d9; --ok:#4ade80; --warn:#fbbf24; --err:#f87171;
+  --whats:#25d366; --r:14px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:'Chakra Petch',system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100dvh}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:15px;color:var(--txt);
+  background:#0d0a1e;border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--cyan)}
+label{display:block;font-size:12.5px;font-weight:600;color:var(--txt2);margin:14px 0 5px;letter-spacing:.4px;text-transform:uppercase}
+.hint{font-size:12px;color:var(--txt2);margin-top:4px;line-height:1.4}
+
+/* ---------- login ---------- */
+#login{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:18px;padding:24px;text-align:center;
+  background:radial-gradient(700px 400px at 50% 20%, rgba(168,85,247,.16), transparent 65%), var(--bg)}
+#login h1{font-family:'Orbitron';font-weight:900;font-size:30px;letter-spacing:3px;
+  background:linear-gradient(90deg,var(--cyan),var(--magenta));-webkit-background-clip:text;background-clip:text;color:transparent}
+#login p{color:var(--txt2);max-width:340px;line-height:1.5}
+.g-btn{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15.5px;
+  padding:14px 26px;border-radius:999px;border:1px solid var(--line2);background:#fff;color:#1a1a1a}
+.login-err{color:var(--err);font-size:13.5px;max-width:360px;line-height:1.45;display:none}
+
+/* ---------- app ---------- */
+#app{display:none;max-width:820px;margin:0 auto;padding:0 14px 120px}
+.topbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:10px;
+  padding:14px 2px;background:linear-gradient(180deg,var(--bg) 80%,transparent)}
+.topbar .brand{font-family:'Orbitron';font-weight:900;font-size:17px;letter-spacing:2px;
+  background:linear-gradient(90deg,var(--cyan),var(--magenta));-webkit-background-clip:text;background-clip:text;color:transparent}
+.topbar .brand small{display:block;font-family:'Chakra Petch';font-weight:600;font-size:10px;
+  letter-spacing:2px;color:var(--txt2);-webkit-text-fill-color:var(--txt2)}
+.topbar .sp{flex:1}
+.icon-btn{background:var(--panel);border:1px solid var(--line);color:var(--txt2);
+  border-radius:10px;padding:9px 12px;font-size:13px;font-weight:600;text-decoration:none;display:inline-block}
+
+.tabs{display:flex;gap:8px;margin:6px 0 16px}
+.tab{flex:1;padding:11px;border-radius:12px;border:1px solid var(--line);background:var(--panel);
+  color:var(--txt2);font-weight:700;font-size:14px}
+.tab.on{color:#0b0518;background:linear-gradient(90deg,var(--cyan),var(--magenta));border-color:transparent}
+
+/* barra de publicação */
+.pubbar{position:fixed;left:0;right:0;bottom:0;z-index:60;
+  background:rgba(13,10,30,.92);backdrop-filter:blur(10px);border-top:1px solid var(--line)}
+.pubbar-in{max-width:820px;margin:0 auto;display:flex;align-items:center;gap:12px;
+  padding:12px 14px calc(12px + env(safe-area-inset-bottom))}
+.pub-status{flex:1;font-size:13.5px;color:var(--txt2)}
+.pub-status.dirty{color:var(--warn);font-weight:600}
+.pub-btn{font-family:'Orbitron';font-weight:700;font-size:14px;letter-spacing:1.5px;
+  padding:13px 26px;border-radius:999px;border:none;color:#0b0518;
+  background:linear-gradient(90deg,var(--cyan),var(--magenta));
+  box-shadow:0 0 22px rgba(232,121,249,.4)}
+.pub-btn:disabled{opacity:.45;box-shadow:none}
+
+/* lista de produtos */
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.toolbar h2{font-size:16px;font-weight:700;flex:1}
+.add-btn{font-weight:700;font-size:14px;padding:11px 18px;border-radius:999px;border:none;
+  color:#0b0518;background:linear-gradient(90deg,#4ade80,#22d3ee)}
+.plist{display:flex;flex-direction:column;gap:10px}
+.pitem{display:flex;align-items:center;gap:12px;padding:10px;border-radius:var(--r);
+  background:var(--panel);border:1px solid var(--line)}
+.pitem.off{opacity:.5}
+.pthumb{width:58px;height:58px;border-radius:10px;flex:0 0 auto;overflow:hidden;
+  background:linear-gradient(160deg,#241b4d,#140f30);display:grid;place-items:center;font-size:28px;
+  border:1px solid var(--line)}
+.pthumb img{width:100%;height:100%;object-fit:cover}
+.pinfo{flex:1;min-width:0}
+.pinfo b{display:block;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pinfo span{font-size:12.5px;color:var(--txt2)}
+.ptags{display:flex;gap:5px;margin-top:4px;flex-wrap:wrap}
+.ptag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--txt2)}
+.ptag.t3d{color:var(--cyan);border-color:rgba(34,211,238,.4)}
+.pacts{display:flex;flex-direction:column;gap:4px}
+.pacts .row{display:flex;gap:4px}
+.mini{width:34px;height:30px;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel2);color:var(--txt2);font-size:13px}
+.mini:disabled{opacity:.3}
+.empty{padding:40px 18px;text-align:center;color:var(--txt2);border:1px dashed var(--line2);border-radius:var(--r);line-height:1.6}
+.linkish{background:none;border:none;color:var(--cyan);font-size:14px;text-decoration:underline}
+
+/* form (modal) */
+.overlay{position:fixed;inset:0;z-index:80;background:rgba(4,3,10,.75);backdrop-filter:blur(5px);
+  display:none;align-items:flex-end;justify-content:center}
+.overlay.open{display:flex}
+@media(min-width:640px){.overlay{align-items:center}}
+.sheet{width:100%;max-width:640px;max-height:94dvh;overflow-y:auto;background:var(--panel);
+  border:1px solid var(--line);border-radius:22px 22px 0 0;padding:18px 18px calc(24px + env(safe-area-inset-bottom))}
+@media(min-width:640px){.sheet{border-radius:22px}}
+.sheet h3{font-family:'Orbitron';font-size:17px;letter-spacing:1px;margin-bottom:4px}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.foto-box{display:flex;gap:14px;align-items:center;margin-top:6px}
+.foto-prev{width:96px;height:96px;border-radius:12px;overflow:hidden;flex:0 0 auto;
+  background:linear-gradient(160deg,#241b4d,#140f30);display:grid;place-items:center;
+  font-size:40px;border:1px solid var(--line)}
+.foto-prev img{width:100%;height:100%;object-fit:cover}
+.foto-acts{display:flex;flex-direction:column;gap:8px;flex:1}
+.sm-btn{font-size:13.5px;font-weight:600;padding:10px 12px;border-radius:10px;
+  border:1px solid var(--line2);background:var(--panel2);color:var(--txt);text-align:center}
+.sm-btn.warn{color:var(--err);border-color:rgba(248,113,113,.35)}
+.switch{display:flex;align-items:center;gap:10px;margin-top:16px;cursor:pointer;user-select:none}
+.switch input{display:none}
+.sw{width:46px;height:26px;border-radius:999px;background:#2a2350;position:relative;transition:.2s;flex:0 0 auto}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#8f86bb;transition:.2s}
+.switch input:checked + .sw{background:linear-gradient(90deg,var(--cyan),var(--magenta))}
+.switch input:checked + .sw::after{left:23px;background:#fff}
+.form-acts{display:flex;gap:10px;margin-top:22px}
+.btn{flex:1;padding:14px;border-radius:12px;border:none;font-weight:700;font-size:15px}
+.btn.primary{color:#0b0518;background:linear-gradient(90deg,var(--cyan),var(--magenta))}
+.btn.ghost{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+
+/* STL viewer */
+.stl-wrap{margin-top:8px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#171132;display:none}
+.stl-wrap.open{display:block}
+.stl-canvas-box{position:relative;width:100%;aspect-ratio:1}
+.stl-canvas-box canvas{width:100%!important;height:100%!important;display:block;touch-action:none}
+.stl-tools{display:flex;gap:8px;padding:10px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line)}
+.stl-tools .sm-btn{flex:1;min-width:150px}
+.cor-filamento{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--txt2)}
+.cor-filamento input{width:42px;height:34px;padding:2px;border-radius:8px}
+
+/* config */
+.cfg-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-bottom:14px}
+.cfg-card h3{font-size:15px;margin-bottom:4px}
+.cfg-card p{font-size:13px;color:var(--txt2);line-height:1.5}
+
+/* toast */
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(20px);z-index:100;
+  background:var(--panel2);border:1px solid var(--line2);color:var(--txt);font-size:14px;font-weight:600;
+  padding:13px 20px;border-radius:999px;opacity:0;pointer-events:none;transition:.3s;max-width:90vw;text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.ok{border-color:rgba(74,222,128,.5)}
+#toast.err{border-color:rgba(248,113,113,.5)}
+
+.loading{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;
+  flex-direction:column;gap:14px;background:rgba(4,3,10,.8);backdrop-filter:blur(4px)}
+.loading.show{display:flex}
+.spin{width:44px;height:44px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--cyan);
+  animation:rot .8s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.loading span{color:var(--txt2);font-size:14px}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login">
+  <h1>LUMIE 3D</h1>
+  <p><b>Painel do Administrador</b><br>Entre com a sua conta Google para gerenciar a vitrine.</p>
+  <button class="g-btn" id="googleBtn">
+    <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.3 6.1 29.4 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.3 6.1 29.4 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.2 5.7l6.2 5.2C36.9 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>
+    Entrar com Google
+  </button>
+  <p class="login-err" id="loginErr"></p>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="topbar">
+    <div class="brand">LUMIE 3D<small>PAINEL ADMIN</small></div>
+    <div class="sp"></div>
+    <a class="icon-btn" href="/" target="_blank" rel="noopener">👁️ Ver site</a>
+    <button class="icon-btn" id="sairBtn">Sair</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" data-tab="produtos">📦 Produtos</button>
+    <button class="tab" data-tab="config">⚙️ Configurações</button>
+  </div>
+
+  <!-- TAB PRODUTOS -->
+  <section id="tab-produtos">
+    <div class="toolbar">
+      <h2 id="contagem">Carregando…</h2>
+      <button class="add-btn" id="novoBtn">＋ Novo produto</button>
+    </div>
+    <div class="plist" id="plist"></div>
+  </section>
+
+  <!-- TAB CONFIG -->
+  <section id="tab-config" style="display:none">
+    <div class="cfg-card">
+      <h3>📱 WhatsApp da loja</h3>
+      <p>Número que recebe as encomendas. Formato: DDI + DDD + número, só dígitos.</p>
+      <label>Número</label>
+      <input id="cfgWhats" inputmode="numeric" placeholder="5541984585895">
+      <p class="hint" id="whatsPrev"></p>
+    </div>
+    <div class="cfg-card">
+      <h3>🔐 Acesso de administrador</h3>
+      <p>Hoje, apenas <b id="cfgEmail">—</b> pode editar a vitrine. Os clientes nunca veem esta página — eles só acessam a vitrine pública. Para dar acesso a outra pessoa, edite o arquivo <code>firestore.rules</code> do projeto.</p>
+    </div>
+    <div class="cfg-card">
+      <h3>💡 Como funciona a publicação</h3>
+      <p>Suas edições ficam salvas como <b>rascunho neste navegador</b> e NÃO aparecem para os clientes até você tocar em <b>🚀 Publicar</b>. Ao publicar, o site atualiza na hora para todo mundo.</p>
+    </div>
+  </section>
+</div>
+
+<!-- BARRA PUBLICAR -->
+<div class="pubbar" id="pubbar" style="display:none">
+  <div class="pubbar-in">
+    <div class="pub-status" id="pubStatus">✅ Tudo publicado</div>
+    <button class="pub-btn" id="pubBtn" disabled>🚀 PUBLICAR</button>
+  </div>
+</div>
+
+<!-- FORM PRODUTO -->
+<div class="overlay" id="formOv">
+  <div class="sheet">
+    <h3 id="formTitulo">Novo produto</h3>
+    <p class="hint">Campos com * são obrigatórios.</p>
+
+    <label>Nome *</label>
+    <input id="fNome" maxlength="60" placeholder="Ex: Dragão Articulado">
+
+    <div class="frow">
+      <div>
+        <label>Preço *</label>
+        <input id="fPreco" maxlength="20" placeholder="Ex: R$ 45">
+      </div>
+      <div>
+        <label>Prazo</label>
+        <input id="fPrazo" maxlength="30" placeholder="Ex: 3 a 5 dias">
+      </div>
+    </div>
+
+    <div class="frow">
+      <div>
+        <label>Categoria *</label>
+        <input id="fCat" maxlength="30" list="catList" placeholder="Ex: Articulados">
+        <datalist id="catList"></datalist>
+      </div>
+      <div>
+        <label>Emoji (sem foto)</label>
+        <input id="fEmoji" maxlength="4" placeholder="🧸">
+      </div>
+    </div>
+
+    <label>Selo de destaque</label>
+    <select id="fBadge">
+      <option value="">— nenhum —</option>
+      <option>🔥 Mais pedido</option>
+      <option>✨ Novo</option>
+      <option>💜 Fofura</option>
+      <option>🎁 Promoção</option>
+      <option>⚡ Última unidade</option>
+    </select>
+
+    <label>Descrição</label>
+    <textarea id="fDesc" rows="3" maxlength="300" placeholder="Descreva a peça de um jeito que dê vontade de comprar 😍"></textarea>
+
+    <label>Foto do produto</label>
+    <div class="foto-box">
+      <div class="foto-prev" id="fotoPrev">🧸</div>
+      <div class="foto-acts">
+        <button class="sm-btn" id="fotoUp">📷 Enviar foto</button>
+        <button class="sm-btn" id="stlUp">🧊 Abrir arquivo STL</button>
+        <button class="sm-btn warn" id="fotoDel" style="display:none">🗑️ Remover foto</button>
+      </div>
+    </div>
+    <input type="file" id="fotoFile" accept="image/*" hidden>
+    <input type="file" id="stlFile" accept=".stl" hidden>
+    <p class="hint">A foto é comprimida automaticamente. Com um STL você gira a peça, escolhe a cor e captura a foto — e, se o modelo for leve, dá para ativar o 3D de verdade no site.</p>
+
+    <!-- visualizador STL -->
+    <div class="stl-wrap" id="stlWrap">
+      <div class="stl-canvas-box" id="stlBox"></div>
+      <div class="stl-tools">
+        <div class="cor-filamento">Cor do filamento <input type="color" id="stlCor" value="#a855f7"></div>
+        <button class="sm-btn" id="stlFoto">📸 Usar este ângulo como foto</button>
+        <label class="switch" style="margin:0;flex:1;min-width:180px">
+          <input type="checkbox" id="stl3dReal">
+          <span class="sw"></span>
+          <span style="font-size:13px">Ativar 3D real no site <span class="hint" id="stlPeso"></span></span>
+        </label>
+      </div>
+    </div>
+
+    <label class="switch">
+      <input type="checkbox" id="fAtivo" checked>
+      <span class="sw"></span>
+      <span>Visível na vitrine</span>
+    </label>
+
+    <div class="form-acts">
+      <button class="btn ghost" id="formCancel">Cancelar</button>
+      <button class="btn primary" id="formSave">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div class="loading" id="loading"><div class="spin"></div><span id="loadingTxt">Carregando…</span></div>
+
+<script>
+/* ═══════════════ FIREBASE ═══════════════ */
+const firebaseConfig = {
+  apiKey: "AIzaSyCdkUZgjy-lZXOkawVBj3pIQ2a1x8sFJyk",
+  authDomain: "luime-a6b51.firebaseapp.com",
+  projectId: "luime-a6b51",
+  appId: "1:631845575977:web:5395f9611dd6cbeec8eb38"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+const $ = id => document.getElementById(id);
+const DRAFT_KEY = "lumie_admin_rascunho_v1";
+const LIMITE_FOTO = 600000;   // ~600 KB em base64
+const LIMITE_GLB  = 680000;   // ~680 KB em base64
+
+/* estado */
+let state = {
+  produtos: [],        // {id, nome, emoji, preco, categoria, desc, prazo, badge, ativo, foto, temModelo3d}
+  deletados: [],       // ids removidos (apagar no publicar)
+  glbNovos: {},        // id -> base64 (novo modelo 3D a subir)
+  glbRemover: [],      // ids cujo modelo 3D deve ser apagado
+  config: { whatsapp: "5541984585895" },
+  dirty: false
+};
+let editandoId = null;
+let stlSessao = null; // sessão three.js do form aberto
+
+/* ═══════════════ HELPERS UI ═══════════════ */
+let toastTimer;
+function toast(msg, tipo){
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "show" + (tipo ? " " + tipo : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.className = "", 3200);
+}
+function loading(on, txt){
+  $("loading").classList.toggle("show", !!on);
+  if (txt) $("loadingTxt").textContent = txt;
+}
+function marcaSujo(){
+  state.dirty = true;
+  salvaRascunho();
+  atualizaPubBar();
+}
+function atualizaPubBar(){
+  const st = $("pubStatus"), btn = $("pubBtn");
+  if (state.dirty){
+    st.textContent = "● Alterações não publicadas";
+    st.classList.add("dirty");
+    btn.disabled = false;
+  } else {
+    st.textContent = "✅ Tudo publicado";
+    st.classList.remove("dirty");
+    btn.disabled = true;
+  }
+}
+
+/* ═══════════════ RASCUNHO LOCAL ═══════════════ */
+function salvaRascunho(){
+  try{
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...state, ts: Date.now() }));
+  }catch(e){
+    try{ // sem espaço: salva sem os modelos 3D
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...state, glbNovos: {}, ts: Date.now() }));
+      toast("⚠️ Rascunho grande: publique logo para não perder os modelos 3D", "err");
+    }catch(e2){ toast("⚠️ Não consegui salvar rascunho local — publique logo!", "err"); }
+  }
+}
+function leRascunho(){
+  try{ return JSON.parse(localStorage.getItem(DRAFT_KEY) || "null"); }catch(e){ return null; }
+}
+function limpaRascunho(){ localStorage.removeItem(DRAFT_KEY); }
+
+/* ═══════════════ LOGIN ═══════════════ */
+$("googleBtn").addEventListener("click", async () => {
+  $("loginErr").style.display = "none";
+  try{
+    await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+  }catch(e){
+    const el = $("loginErr");
+    el.style.display = "block";
+    el.textContent = (e.code === "auth/popup-blocked")
+      ? "O navegador bloqueou a janela de login. Permita pop-ups para este site e tente de novo."
+      : (e.code === "auth/operation-not-allowed" || e.code === "auth/configuration-not-found")
+      ? "O login Google ainda não foi ativado no Firebase. No console: Authentication → Sign-in method → Google → Ativar."
+      : "Erro ao entrar: " + (e.message || e.code);
+  }
+});
+$("sairBtn").addEventListener("click", () => auth.signOut());
+
+auth.onAuthStateChanged(async user => {
+  if (user){
+    $("login").style.display = "none";
+    $("app").style.display = "block";
+    $("pubbar").style.display = "block";
+    $("cfgEmail").textContent = user.email;
+    await iniciar();
+  } else {
+    $("login").style.display = "flex";
+    $("app").style.display = "none";
+    $("pubbar").style.display = "none";
+  }
+});
+
+/* ═══════════════ CARREGAR DADOS ═══════════════ */
+async function carregaPublicado(){
+  const [snap, cfgDoc] = await Promise.all([
+    db.collection("produtos").get(),
+    db.collection("site").doc("config").get()
+  ]);
+  const prods = [];
+  snap.forEach(d => prods.push({ id: d.id, ...d.data() }));
+  prods.sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+  state.produtos = prods;
+  state.deletados = [];
+  state.glbNovos = {};
+  state.glbRemover = [];
+  if (cfgDoc.exists && cfgDoc.data().whatsapp) state.config.whatsapp = cfgDoc.data().whatsapp;
+  state.dirty = false;
+}
+async function iniciar(){
+  loading(true, "Carregando vitrine…");
+  try{
+    const draft = leRascunho();
+    if (draft && draft.dirty){
+      const quando = new Date(draft.ts).toLocaleString("pt-BR");
+      if (confirm(`Você tem um rascunho NÃO publicado (${quando}).\n\nOK = continuar o rascunho\nCancelar = descartar e carregar o que está no ar`)){
+        state = { ...state, ...draft };
+        delete state.ts;
+      } else {
+        limpaRascunho();
+        await carregaPublicado();
+      }
+    } else {
+      await carregaPublicado();
+    }
+  }catch(e){
+    console.error(e);
+    toast("Erro ao carregar: " + (e.message || e.code), "err");
+  }
+  $("cfgWhats").value = state.config.whatsapp || "";
+  atualizaWhatsPrev();
+  renderLista();
+  atualizaPubBar();
+  loading(false);
+}
+
+/* ═══════════════ LISTA ═══════════════ */
+function renderLista(){
+  const box = $("plist");
+  box.innerHTML = "";
+  const n = state.produtos.length;
+  $("contagem").textContent = n === 0 ? "Nenhum produto" :
+    `${n} produto${n > 1 ? "s" : ""} · ${state.produtos.filter(p => p.ativo).length} visível(is)`;
+
+  if (n === 0){
+    box.innerHTML = `<div class="empty">A vitrine está vazia.<br>
+      <b>＋ Novo produto</b> para começar, ou<br>
+      <button class="linkish" id="seedBtn">importar 8 produtos de exemplo</button></div>`;
+    const sb = $("seedBtn");
+    if (sb) sb.onclick = importaExemplos;
+    return;
+  }
+  state.produtos.forEach((p, i) => {
+    const el = document.createElement("div");
+    el.className = "pitem" + (p.ativo ? "" : " off");
+    el.innerHTML = `
+      <div class="pthumb">${p.foto ? `<img src="${p.foto}" alt="">` : (p.emoji || "🧸")}</div>
+      <div class="pinfo">
+        <b>${esc(p.nome)}</b>
+        <span>${esc(p.preco)} · ${esc(p.categoria)}</span>
+        <div class="ptags">
+          ${p.badge ? `<span class="ptag">${esc(p.badge)}</span>` : ""}
+          ${(p.temModelo3d || state.glbNovos[p.id]) ? `<span class="ptag t3d">3D real</span>` : ""}
+          ${p.ativo ? "" : `<span class="ptag">oculto</span>`}
+        </div>
+      </div>
+      <div class="pacts">
+        <div class="row">
+          <button class="mini" data-a="up" title="Subir" ${i === 0 ? "disabled" : ""}>▲</button>
+          <button class="mini" data-a="down" title="Descer" ${i === n - 1 ? "disabled" : ""}>▼</button>
+        </div>
+        <div class="row">
+          <button class="mini" data-a="edit" title="Editar">✏️</button>
+          <button class="mini" data-a="dup" title="Duplicar">⧉</button>
+          <button class="mini" data-a="del" title="Excluir">🗑️</button>
+        </div>
+      </div>`;
+    el.querySelectorAll(".mini").forEach(b => b.addEventListener("click", ev => {
+      ev.stopPropagation();
+      acaoProduto(b.dataset.a, p.id);
+    }));
+    box.appendChild(el);
+  });
+}
+function esc(s){ return String(s ?? "").replace(/[<>&"]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c])); }
+
+function acaoProduto(a, id){
+  const i = state.produtos.findIndex(x => x.id === id);
+  if (i < 0) return;
+  const p = state.produtos[i];
+  if (a === "edit") abreForm(p);
+  if (a === "up" && i > 0){ state.produtos.splice(i, 1); state.produtos.splice(i - 1, 0, p); marcaSujo(); renderLista(); }
+  if (a === "down" && i < state.produtos.length - 1){ state.produtos.splice(i, 1); state.produtos.splice(i + 1, 0, p); marcaSujo(); renderLista(); }
+  if (a === "dup"){
+    const c = { ...p, id: novoId(), nome: p.nome + " (cópia)", temModelo3d: false };
+    state.produtos.splice(i + 1, 0, c);
+    marcaSujo(); renderLista();
+    toast("Produto duplicado");
+  }
+  if (a === "del"){
+    if (!confirm(`Excluir "${p.nome}"?\n\n(A exclusão só vale no site depois de Publicar)`)) return;
+    state.produtos.splice(i, 1);
+    state.deletados.push(id);
+    delete state.glbNovos[id];
+    marcaSujo(); renderLista();
+    toast("Produto excluído do rascunho");
+  }
+}
+const novoId = () => (crypto.randomUUID ? crypto.randomUUID() : "p" + Date.now() + Math.random().toString(36).slice(2, 8));
+
+function importaExemplos(){
+  const ex = [
+    ["Dragão Articulado","🐉","R$ 45","Articulados","Dragão flexível impresso em peça única, já sai da impressora se mexendo!","3 a 5 dias","🔥 Mais pedido"],
+    ["Vaso Baby Groot","🌱","R$ 35","Decoração","O guardião mais fofo da galáxia cuidando da sua plantinha.","3 a 5 dias",""],
+    ["Suporte de Headset","🎧","R$ 55","Setup Gamer","Deixe seu setup digno de streamer!","4 a 6 dias",""],
+    ["Luminária Lua","🌕","R$ 89","Decoração","A Lua na palma da sua mão, com textura real da superfície lunar. 🌙","5 a 7 dias","✨ Novo"],
+    ["Chaveiro Pokébola","⚡","R$ 12","Chaveiros","Temos que pegar! Ótimo para lembrancinhas.","2 a 3 dias",""],
+    ["Miniatura de RPG","🎲","R$ 25","RPG & Mini","Seu personagem de mesa merece um corpo!","4 a 6 dias",""],
+    ["Porta-Controle Gamer","🎮","R$ 49","Setup Gamer","Chega de controle jogado no sofá!","4 a 6 dias",""],
+    ["Gatinho Articulado","🐱","R$ 30","Articulados","Um gatinho flexível que derrete corações.","3 a 5 dias","💜 Fofura"]
+  ];
+  state.produtos = ex.map(([nome, emoji, preco, categoria, desc, prazo, badge]) =>
+    ({ id: novoId(), nome, emoji, preco, categoria, desc, prazo, badge, ativo: true, foto: "", temModelo3d: false }));
+  marcaSujo(); renderLista();
+  toast("8 exemplos importados — edite e publique!");
+}
+
+/* ═══════════════ FORM ═══════════════ */
+function abreForm(p){
+  editandoId = p ? p.id : null;
+  $("formTitulo").textContent = p ? "Editar produto" : "Novo produto";
+  $("fNome").value = p?.nome || "";
+  $("fPreco").value = p?.preco || "";
+  $("fPrazo").value = p?.prazo || "3 a 5 dias";
+  $("fCat").value = p?.categoria || "";
+  $("fEmoji").value = p?.emoji || "";
+  $("fBadge").value = p?.badge || "";
+  $("fDesc").value = p?.desc || "";
+  $("fAtivo").checked = p ? !!p.ativo : true;
+  formFoto = p?.foto || "";
+  atualizaFotoPrev();
+  // categorias existentes no datalist
+  $("catList").innerHTML = [...new Set([...state.produtos.map(x => x.categoria),
+    "Articulados","Decoração","Setup Gamer","Chaveiros","RPG & Mini","Utilidades"])]
+    .filter(Boolean).map(c => `<option value="${esc(c)}">`).join("");
+  fechaSTL();
+  $("stl3dReal").checked = !!(p && (p.temModelo3d || state.glbNovos[p.id]));
+  $("formOv").classList.add("open");
+}
+function fechaForm(){
+  $("formOv").classList.remove("open");
+  fechaSTL();
+}
+$("novoBtn").addEventListener("click", () => abreForm(null));
+$("formCancel").addEventListener("click", fechaForm);
+$("formOv").addEventListener("click", e => { if (e.target === $("formOv")) fechaForm(); });
+
+let formFoto = "";
+function atualizaFotoPrev(){
+  const box = $("fotoPrev");
+  box.innerHTML = formFoto ? `<img src="${formFoto}" alt="">` : ($("fEmoji").value || "🧸");
+  $("fotoDel").style.display = formFoto ? "block" : "none";
+}
+$("fEmoji").addEventListener("input", atualizaFotoPrev);
+$("fotoUp").addEventListener("click", () => $("fotoFile").click());
+$("fotoDel").addEventListener("click", () => { formFoto = ""; atualizaFotoPrev(); });
+$("fotoFile").addEventListener("change", async e => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  loading(true, "Otimizando foto…");
+  try{
+    formFoto = await comprimeImagem(f);
+    atualizaFotoPrev();
+  }catch(err){ toast("Não consegui ler essa imagem", "err"); }
+  loading(false);
+});
+
+/* comprime para caber no banco */
+function comprimeImagem(fileOrDataUrl, maxDim = 900){
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width: w, height: h } = img;
+      const esc = Math.min(1, maxDim / Math.max(w, h));
+      w = Math.round(w * esc); h = Math.round(h * esc);
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      const cx = cv.getContext("2d");
+      cx.fillStyle = "#171132"; cx.fillRect(0, 0, w, h); // fundo p/ PNG transparente
+      cx.drawImage(img, 0, 0, w, h);
+      let q = 0.82, out = cv.toDataURL("image/jpeg", q);
+      while (out.length > LIMITE_FOTO && q > 0.4){
+        q -= 0.1;
+        out = cv.toDataURL("image/jpeg", q);
+      }
+      if (out.length > LIMITE_FOTO) rej(new Error("grande demais"));
+      else res(out);
+    };
+    img.onerror = rej;
+    if (typeof fileOrDataUrl === "string") img.src = fileOrDataUrl;
+    else {
+      const r = new FileReader();
+      r.onload = () => img.src = r.result;
+      r.onerror = rej;
+      r.readAsDataURL(fileOrDataUrl);
+    }
+  });
+}
+
+/* salvar produto */
+$("formSave").addEventListener("click", async () => {
+  const nome = $("fNome").value.trim();
+  const preco = $("fPreco").value.trim();
+  const cat = $("fCat").value.trim();
+  if (!nome || !preco || !cat){ toast("Preencha nome, preço e categoria", "err"); return; }
+
+  const dados = {
+    nome, preco, categoria: cat,
+    emoji: $("fEmoji").value.trim() || "🧸",
+    prazo: $("fPrazo").value.trim() || "a combinar",
+    badge: $("fBadge").value,
+    desc: $("fDesc").value.trim(),
+    ativo: $("fAtivo").checked,
+    foto: formFoto
+  };
+
+  // 3D real: exporta GLB se marcado e houver STL carregado nesta sessão
+  const quer3d = $("stl3dReal").checked;
+  let id = editandoId;
+  if (!id){ id = novoId(); }
+
+  if (quer3d && stlSessao){
+    loading(true, "Otimizando modelo 3D…");
+    try{
+      const b64 = await exportaGLB();
+      if (b64.length > LIMITE_GLB){
+        loading(false);
+        if (!confirm(`Este modelo ficou pesado (${Math.round(b64.length/1024)} KB) e não cabe no plano gratuito.\n\nOK = salvar só com a foto (sem 3D real)\nCancelar = voltar e ajustar`)) return;
+        state.glbRemover.push(id);
+        delete state.glbNovos[id];
+        dados.temModelo3d = false;
+      } else {
+        state.glbNovos[id] = b64;
+        state.glbRemover = state.glbRemover.filter(x => x !== id);
+        dados.temModelo3d = true;
+      }
+    }catch(e){
+      console.error(e);
+      toast("Falha ao converter o STL — salvei sem 3D real", "err");
+      dados.temModelo3d = false;
+    }
+    loading(false);
+  } else if (quer3d){
+    // manter o 3D que já existe publicado
+    const atual = state.produtos.find(x => x.id === id);
+    dados.temModelo3d = !!(atual?.temModelo3d || state.glbNovos[id]);
+  } else {
+    if (state.glbNovos[id]) delete state.glbNovos[id];
+    const atual = state.produtos.find(x => x.id === id);
+    if (atual?.temModelo3d) state.glbRemover.push(id);
+    dados.temModelo3d = false;
+  }
+
+  if (editandoId){
+    const i = state.produtos.findIndex(x => x.id === editandoId);
+    state.produtos[i] = { ...state.produtos[i], ...dados };
+  } else {
+    state.produtos.push({ id, ...dados });
+  }
+  marcaSujo();
+  renderLista();
+  fechaForm();
+  toast("Salvo no rascunho — lembre de Publicar!");
+});
+
+/* ═══════════════ STL / 3D ═══════════════ */
+function stlPronto(){
+  return new Promise(res => {
+    if (window.STL3D) return res();
+    window.addEventListener("stl3d-ready", () => res(), { once: true });
+  });
+}
+$("stlUp").addEventListener("click", () => $("stlFile").click());
+$("stlFile").addEventListener("change", async e => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  loading(true, "Abrindo modelo 3D…");
+  try{
+    await stlPronto();
+    const buf = await f.arrayBuffer();
+    montaVisualizadorSTL(buf);
+    $("stlWrap").classList.add("open");
+  }catch(err){
+    console.error(err);
+    toast("Não consegui abrir esse STL", "err");
+  }
+  loading(false);
+});
+
+function fechaSTL(){
+  if (stlSessao){
+    stlSessao.parar();
+    stlSessao = null;
+  }
+  $("stlWrap").classList.remove("open");
+  $("stlBox").innerHTML = "";
+  $("stlPeso").textContent = "";
+}
+
+function montaVisualizadorSTL(buffer){
+  fechaSTL();
+  const { THREE, STLLoader, OrbitControls } = window.STL3D;
+  const box = $("stlBox");
+  const tam = Math.min(box.clientWidth || 480, 640);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setSize(tam, tam);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  box.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x171132);
+  const cam = new THREE.PerspectiveCamera(38, 1, 0.1, 1000);
+
+  scene.add(new THREE.HemisphereLight(0xbfb7ff, 0x1a1338, 1.15));
+  const luz1 = new THREE.DirectionalLight(0xffffff, 1.6); luz1.position.set(4, 6, 5); scene.add(luz1);
+  const luz2 = new THREE.DirectionalLight(0x22d3ee, 0.7); luz2.position.set(-5, 2, -4); scene.add(luz2);
+
+  const geo = new STLLoader().parse(buffer);
+  geo.computeVertexNormals();
+  geo.center();
+  geo.computeBoundingSphere();
+  const raio = geo.boundingSphere.radius || 1;
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color($("stlCor").value), roughness: 0.42, metalness: 0.05
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = -Math.PI / 2; // STL costuma vir com Z para cima
+  scene.add(mesh);
+
+  cam.position.set(raio * 2.2, raio * 1.4, raio * 2.2);
+  const ctrl = new OrbitControls(cam, renderer.domElement);
+  ctrl.enableDamping = true;
+  ctrl.target.set(0, 0, 0);
+
+  let vivo = true;
+  (function anima(){
+    if (!vivo) return;
+    requestAnimationFrame(anima);
+    ctrl.update();
+    renderer.render(scene, cam);
+  })();
+
+  $("stlCor").oninput = () => { mat.color.set($("stlCor").value); renderer.render(scene, cam); };
+  $("stlPeso").textContent = `(${(buffer.byteLength / 1048576).toFixed(1)} MB no STL)`;
+
+  stlSessao = {
+    mesh, scene, renderer, cam,
+    parar(){ vivo = false; renderer.dispose(); geo.dispose(); mat.dispose(); }
+  };
+}
+
+$("stlFoto").addEventListener("click", async () => {
+  if (!stlSessao) return;
+  stlSessao.renderer.render(stlSessao.scene, stlSessao.cam);
+  loading(true, "Gerando foto…");
+  try{
+    formFoto = await comprimeImagem(stlSessao.renderer.domElement.toDataURL("image/png"));
+    atualizaFotoPrev();
+    toast("📸 Foto capturada do modelo!");
+  }catch(e){ toast("Falha ao capturar", "err"); }
+  loading(false);
+});
+
+function exportaGLB(){
+  return new Promise((res, rej) => {
+    const { GLTFExporter } = window.STL3D;
+    new GLTFExporter().parse(stlSessao.mesh,
+      glb => {
+        const bytes = new Uint8Array(glb);
+        let bin = "";
+        const CH = 0x8000;
+        for (let i = 0; i < bytes.length; i += CH)
+          bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+        res(btoa(bin));
+      },
+      rej, { binary: true });
+  });
+}
+
+/* ═══════════════ CONFIG ═══════════════ */
+function atualizaWhatsPrev(){
+  const n = $("cfgWhats").value.replace(/\D/g, "");
+  $("whatsPrev").textContent = n.length >= 12 ? `✅ Link: wa.me/${n}` : "⚠️ Número incompleto (ex: 5541984585895)";
+}
+$("cfgWhats").addEventListener("input", () => {
+  $("cfgWhats").value = $("cfgWhats").value.replace(/\D/g, "");
+  state.config.whatsapp = $("cfgWhats").value;
+  atualizaWhatsPrev();
+  marcaSujo();
+});
+
+/* tabs */
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("on"));
+  t.classList.add("on");
+  $("tab-produtos").style.display = t.dataset.tab === "produtos" ? "block" : "none";
+  $("tab-config").style.display = t.dataset.tab === "config" ? "block" : "none";
+}));
+
+/* ═══════════════ PUBLICAR ═══════════════ */
+$("pubBtn").addEventListener("click", async () => {
+  const n = state.produtos.filter(p => p.ativo).length;
+  if (!confirm(`Publicar agora?\n\nA vitrine pública ficará com ${n} produto(s) visível(is).`)) return;
+  loading(true, "Publicando…");
+  try{
+    const batch = db.batch();
+    state.produtos.forEach((p, i) => {
+      const { id, ...campos } = p;
+      batch.set(db.collection("produtos").doc(id), { ...campos, ordem: i });
+    });
+    state.deletados.forEach(id => {
+      batch.delete(db.collection("produtos").doc(id));
+      batch.delete(db.collection("modelos3d").doc(id));
+    });
+    Object.entries(state.glbNovos).forEach(([id, b64]) => {
+      batch.set(db.collection("modelos3d").doc(id), { glb: b64 });
+    });
+    state.glbRemover.forEach(id => batch.delete(db.collection("modelos3d").doc(id)));
+    batch.set(db.collection("site").doc("config"), {
+      whatsapp: state.config.whatsapp || "5541984585895",
+      publicado: true,
+      atualizadoEm: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await batch.commit();
+
+    state.deletados = [];
+    state.glbNovos = {};
+    state.glbRemover = [];
+    state.dirty = false;
+    limpaRascunho();
+    atualizaPubBar();
+    renderLista();
+    toast("🚀 Publicado! O site já está atualizado.", "ok");
+  }catch(e){
+    console.error(e);
+    toast(e.code === "permission-denied"
+      ? "Sem permissão: seu e-mail não está na lista de administradores."
+      : "Erro ao publicar: " + (e.message || e.code), "err");
+  }
+  loading(false);
+});
+
+/* avisa antes de fechar com rascunho sujo */
+window.addEventListener("beforeunload", e => {
+  if (state.dirty){ e.preventDefault(); e.returnValue = ""; }
+});
+</script>
+</body>
+</html>

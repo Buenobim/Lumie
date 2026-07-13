@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ✏️ ADMINISTRADORES: para dar acesso a outra pessoa,
+    // adicione o e-mail dela na lista abaixo e rode:
+    //   firebase deploy --only firestore:rules
+    function isAdmin() {
+      return request.auth != null &&
+        request.auth.token.email in [
+          'buenobimbueno@gmail.com'
+        ];
+    }
+
+    // Vitrine: qualquer pessoa lê, só admin escreve
+    match /produtos/{id}   { allow read: if true; allow write: if isAdmin(); }
+    match /modelos3d/{id}  { allow read: if true; allow write: if isAdmin(); }
+    match /site/{doc}      { allow read: if true; allow write: if isAdmin(); }
+
+    // Tudo o mais: bloqueado
+    match /{document=**}   { allow read, write: if false; }
+  }
+}

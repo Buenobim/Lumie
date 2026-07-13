@@ -281,6 +281,8 @@ header.hero{position:relative;padding:64px 0 30px;text-align:center;overflow:hid
   background:linear-gradient(180deg,transparent,rgba(34,211,238,.07) 65%,rgba(34,211,238,.16));
   clip-path:polygon(28% 0,72% 0,100% 100%,0 100%);}
 
+.vazio{grid-column:1/-1;text-align:center;padding:52px 20px;color:var(--txt2);
+  border:1px dashed var(--line);border-radius:18px;line-height:1.8;font-size:15px}
 .c-name{font-weight:700;font-size:14.5px;line-height:1.25}
 .c-row{display:flex;align-items:center;justify-content:space-between;margin-top:6px;gap:6px}
 .c-price{font-family:'Orbitron';font-weight:700;font-size:14px;color:var(--cyan);text-shadow:0 0 10px rgba(34,211,238,.45)}
@@ -480,9 +482,10 @@ footer p{margin-top:8px;line-height:1.6}
    ║     - modelo3d (opcional): arquivo .glb na pasta           ║
    ║       "modelos/" → a peça gira em 3D DE VERDADE!           ║
    ╚════════════════════════════════════════════════════════════╝ */
-const WHATSAPP = "5541984585895";
+let WHATSAPP = "5541984585895";
 
-const PRODUTOS = [
+/* Produtos de exemplo — usados só até você publicar os seus pelo painel /admin */
+const PRODUTOS_EXEMPLO = [
   {
     nome: "Dragão Articulado",
     emoji: "🐉",
@@ -573,6 +576,8 @@ const PRODUTOS = [
   }
 ];
 
+let PRODUTOS = PRODUTOS_EXEMPLO;
+
 /* Mensagens do WhatsApp (pode editar!) */
 const MSG_ENCOMENDA = (p) =>
   `Oiii! 💜✨ Gostei muito desse aqui, quero agoooora! 😍\n\n🛒 *${p.nome}* — ${p.preco}`;
@@ -584,8 +589,11 @@ const MSG_GERAL =
 /* ═══════════════ fim da configuração ═══════════════ */
 
 const zap = (msg) => `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(msg)}`;
-document.getElementById("customBtn").href = zap(MSG_PERSONALIZAR);
-document.getElementById("fabWhats").href = zap(MSG_GERAL);
+function aplicaLinks(){
+  document.getElementById("customBtn").href = zap(MSG_PERSONALIZAR);
+  document.getElementById("fabWhats").href = zap(MSG_GERAL);
+}
+aplicaLinks();
 
 /* ---------- INTRO ---------- */
 const intro = document.getElementById("intro");
@@ -618,24 +626,32 @@ document.getElementById("skipBtn").addEventListener("click", fechaIntro);
 
 /* ---------- FILTROS ---------- */
 const chipsEl = document.getElementById("chips");
-const cats = ["Todos", ...new Set(PRODUTOS.map(x => x.categoria))];
 let catAtiva = "Todos";
-cats.forEach(c => {
-  const b = document.createElement("button");
-  b.className = "chip" + (c === "Todos" ? " on" : "");
-  b.textContent = c === "Todos" ? "✨ Todos" : c;
-  b.onclick = () => {
-    catAtiva = c;
-    document.querySelectorAll(".chip").forEach(x => x.classList.remove("on"));
-    b.classList.add("on");
-    renderGrid();
-  };
-  chipsEl.appendChild(b);
-});
+function montaChips(){
+  chipsEl.innerHTML = "";
+  catAtiva = "Todos";
+  const cats = ["Todos", ...new Set(PRODUTOS.map(x => x.categoria))];
+  cats.forEach(c => {
+    const b = document.createElement("button");
+    b.className = "chip" + (c === "Todos" ? " on" : "");
+    b.textContent = c === "Todos" ? "✨ Todos" : c;
+    b.onclick = () => {
+      catAtiva = c;
+      document.querySelectorAll(".chip").forEach(x => x.classList.remove("on"));
+      b.classList.add("on");
+      renderGrid();
+    };
+    chipsEl.appendChild(b);
+  });
+}
+montaChips();
 
 /* ---------- GRID ---------- */
 const grid = document.getElementById("grid");
 function faceHTML(prod){
+  if (!prod.foto) return `
+    <div class="face front"><div class="ph" style="display:grid">${prod.emoji}</div></div>
+    <div class="face back"><div class="ph" style="display:grid">${prod.emoji}</div></div>`;
   return `
     <div class="face front"><img src="${prod.foto}" alt="${prod.nome}"
         onerror="this.closest('.spinner').classList.add('no-img')"><div class="ph">${prod.emoji}</div></div>
@@ -663,6 +679,10 @@ function renderGrid(){
     grid.appendChild(card);
     setTimeout(() => card.classList.add("in"), 40 * i);
   });
+  if (!grid.children.length){
+    grid.innerHTML = `<div class="vazio">🛠️ A vitrine está sendo reabastecida!<br>
+      Chama a gente no WhatsApp que te mostramos as novidades em primeira mão 💜</div>`;
+  }
 }
 renderGrid();
 
@@ -672,11 +692,12 @@ const modalBody = document.getElementById("modalBody");
 let rafId = null;
 
 function abreModal(prod){
-  const usaGLB = !!prod.modelo3d;
+  const usaGLB = !!prod.modelo3d || !!prod.temModelo3d;
   modalBody.innerHTML = `
     ${usaGLB ? `
-      <model-viewer class="m-viewer" src="${prod.modelo3d}" auto-rotate rotation-per-second="30deg"
-        camera-controls disable-zoom shadow-intensity="1" exposure="1.1"></model-viewer>`
+      <model-viewer class="m-viewer" ${prod.modelo3d ? `src="${prod.modelo3d}"` : ""} auto-rotate rotation-per-second="30deg"
+        camera-controls disable-zoom shadow-intensity="1" exposure="1.1"></model-viewer>
+      <p class="m-hint">🧊 gire com o dedo — é 3D de verdade!</p>`
     : `
       <div class="m-stage" id="mStage">
         <div class="beam" style="width:140px;height:190px;bottom:18px"></div>
@@ -705,6 +726,24 @@ function abreModal(prod){
     s.type = "module";
     s.src = "https://unpkg.com/@google/model-viewer@3.4.0/dist/model-viewer.min.js";
     document.head.appendChild(s);
+  }
+
+  // modelo 3D publicado pelo painel: baixa só quando o cliente abre a peça
+  if (usaGLB && !prod.modelo3d){
+    (async () => {
+      try{
+        const r = await fetch(fsURL(`modelos3d/${prod.id}`));
+        if (!r.ok) throw 0;
+        const d = fsCampos((await r.json()).fields);
+        const bytes = Uint8Array.from(atob(d.glb), c => c.charCodeAt(0));
+        const mv = modalBody.querySelector("model-viewer");
+        if (mv) mv.src = URL.createObjectURL(new Blob([bytes], { type: "model/gltf-binary" }));
+      }catch(e){
+        const mv = modalBody.querySelector("model-viewer");
+        if (mv && prod.foto) mv.outerHTML =
+          `<img src="${prod.foto}" alt="${prod.nome}" style="display:block;max-width:250px;max-height:250px;margin:0 auto;border-radius:14px">`;
+      }
+    })();
   }
 
   if (!usaGLB){
@@ -740,6 +779,48 @@ function fechaModal(){
 document.getElementById("modalClose").addEventListener("click", fechaModal);
 document.getElementById("modalBg").addEventListener("click", fechaModal);
 window.addEventListener("keydown", e => { if (e.key === "Escape") fechaModal(); });
+
+/* ============================================================
+   DADOS AO VIVO — carrega o que foi publicado no painel /admin
+   (enquanto nada foi publicado, mostra os exemplos acima)
+   ============================================================ */
+const FB_PROJ = "luime-a6b51";
+const FB_KEY = "AIzaSyCdkUZgjy-lZXOkawVBj3pIQ2a1x8sFJyk";
+const fsURL = p => `https://firestore.googleapis.com/v1/projects/${FB_PROJ}/databases/(default)/documents/${p}?key=${FB_KEY}`;
+function fsVal(v){
+  if (v.stringValue !== undefined) return v.stringValue;
+  if (v.integerValue !== undefined) return +v.integerValue;
+  if (v.doubleValue !== undefined) return +v.doubleValue;
+  if (v.booleanValue !== undefined) return v.booleanValue;
+  if (v.timestampValue !== undefined) return v.timestampValue;
+  if (v.mapValue) return fsCampos(v.mapValue.fields);
+  if (v.arrayValue) return (v.arrayValue.values || []).map(fsVal);
+  return null;
+}
+function fsCampos(fields){
+  const o = {};
+  for (const k in (fields || {})) o[k] = fsVal(fields[k]);
+  return o;
+}
+(async () => {
+  try{
+    const [cfgR, prodR] = await Promise.all([
+      fetch(fsURL("site/config")),
+      fetch(fsURL("produtos") + "&pageSize=300")
+    ]);
+    if (!cfgR.ok) return; // nunca publicado → mantém exemplos
+    const cfg = fsCampos((await cfgR.json()).fields);
+    if (!cfg.publicado) return;
+    if (cfg.whatsapp){ WHATSAPP = cfg.whatsapp; aplicaLinks(); }
+    const docs = prodR.ok ? ((await prodR.json()).documents || []) : [];
+    PRODUTOS = docs
+      .map(d => ({ id: d.name.split("/").pop(), ...fsCampos(d.fields) }))
+      .filter(p => p.ativo)
+      .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+    montaChips();
+    renderGrid();
+  }catch(e){ /* sem internet/erro: exemplos continuam no ar */ }
+})();
 </script>
 </body>
 </html>
