@@ -1,0 +1,13 @@
+🧊 MODELOS 3D DE VERDADE (OPCIONAL)
+
+Se você tiver o modelo 3D da peça no formato .glb, coloque aqui!
+Aí, ao abrir a peça no site, ela gira em 3D DE VERDADE
+(a pessoa pode girar com o dedo em qualquer direção).
+
+Como ativar:
+1. Salve o arquivo aqui, ex: modelos/dragao.glb
+2. No index.html, na peça correspondente, preencha:
+   modelo3d: "modelos/dragao.glb"
+
+Dica: se você tem o .STL da peça, dá pra converter para .glb
+gratuitamente em sites como https://products.aspose.app/3d/conversion/stl-to-glb

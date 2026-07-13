@@ -1,0 +1,11 @@
+📸 COLOQUE AS FOTOS DAS SUAS IMPRESSÕES AQUI!
+
+Como funciona:
+1. Tire fotos das suas peças (de preferência com fundo limpo/escuro)
+2. Salve nesta pasta com o nome que está no index.html
+   Exemplos: dragao.jpg, groot.jpg, lua.jpg, pokebola.jpg...
+3. Pronto! A foto aparece automaticamente girando na vitrine.
+
+Enquanto a foto não existir, aparece um emoji no lugar (ninguém fica sem ver nada).
+
+Dica: fotos quadradas (ex: 800x800) ficam perfeitas na vitrine.
