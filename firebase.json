@@ -5,6 +5,8 @@
       "firebase.json",
       ".firebaserc",
       "**/.*",
+      ".git/**",
+      ".claude/**",
       "**/node_modules/**",
       "COMO-PUBLICAR.md",
       "**/LEIA-ME.txt"
